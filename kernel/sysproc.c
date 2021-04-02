@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -94,4 +95,36 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// implemented by armeria
+uint64
+sys_trace(void)
+{
+  int tmask;
+
+  if (argint(0, &tmask) < 0) {
+    return -1;
+  }
+  myproc()->tmask = tmask;
+  return 0;
+}
+
+// implemented by armeria
+uint64
+sys_sysinfo(void)
+{
+  uint64 sinfo_addr;
+  if (argaddr(0, &sinfo_addr) < 0) {
+    return -1;
+  }
+  if (sinfo_addr > 0x3fffffffff) {
+    return -1;
+  }
+  struct sysinfo sinfo;
+  struct proc *p = myproc();
+  sinfo.freemem = collectfree();
+  sinfo.nproc = collectproc();
+  copyout(p->pagetable, sinfo_addr, (char*)&sinfo, sizeof(sinfo));
+  return 0;
 }
