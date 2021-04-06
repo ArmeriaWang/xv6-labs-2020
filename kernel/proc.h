@@ -105,4 +105,5 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   pagetable_t kpagetable;      // A copy of kernel pagetable
+  uint64 kstack_addr;          // for debug
 };

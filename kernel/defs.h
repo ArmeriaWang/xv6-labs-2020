@@ -108,6 +108,7 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+void            proc_freekpagetable(pagetable_t kpagetable, struct proc *p);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -181,7 +182,8 @@ int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t pagetable);
 pagetable_t     make_kpagetable4proc();
 void            kvmmap4proc(pagetable_t kernel_pagetable, uint64 va, uint64 pa, uint64 sz, int perm);
-
+void            kvmchangehart4proc(pagetable_t kernel_pagetable);
+pte_t*          walk(pagetable_t pagetable, uint64 va, int alloc);
 // plic.c
 void            plicinit(void);
 void            plicinithart(void);

@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -80,6 +82,13 @@ kvmmap4proc(pagetable_t kernel_pagetable, uint64 va, uint64 pa, uint64 sz, int p
 // and enable paging.
 void
 kvminithart()
+{
+  w_satp(MAKE_SATP(kernel_pagetable));
+  sfence_vma();
+}
+
+void
+kvmchangehart4proc(pagetable_t kernel_pagetable)
 {
   w_satp(MAKE_SATP(kernel_pagetable));
   sfence_vma();
@@ -162,7 +171,7 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pte = walk(myproc()->kpagetable, va, 0);
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -186,8 +195,10 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
-    if(*pte & PTE_V)
+    if(*pte & PTE_V) {
+      // printf("remapping: va = %p, existing pte = %p\n\t  pa = %p, pgt_addr = %p\n", va, *pte, PTE2PA(*pte), pte);
       panic("remap");
+    }
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;

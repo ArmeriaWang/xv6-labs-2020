@@ -21,6 +21,8 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+static void freewalk4proc_kpagetable(pagetable_t kpagetable, int level, struct proc *p);
+
 // initialize the proc table at boot time.
 void
 procinit(void)
@@ -116,10 +118,16 @@ found:
   }
 
   char *pa = kalloc();
-  if(pa == 0)
-    panic("kalloc");
-  kvmmap(p->kstack, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  if(pa == 0) {
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  p->kstack_addr = (uint64)pa;
+  // kvmmap(p->kstack, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  // printf("after kvmmap: kstack = %p  pa = %p\n", p->kstack, pa);
   kvmmap4proc(p->kpagetable, p->kstack, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -147,9 +155,23 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+
+  if (p->kstack) {
+    pte_t *pte = walk(p->kpagetable, p->kstack, 0);
+    if (pte == 0)
+      panic("freeproc :: kstack");
+    kfree((void*)PTE2PA(*pte));
+  }
+  // p->kstack = 0;
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+  
+  if (p->kpagetable)
+    proc_freekpagetable(p->kpagetable, p);
+  p->kpagetable = 0;
+  
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -158,6 +180,29 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+}
+
+void
+proc_freekpagetable(pagetable_t kpagetable, struct proc *p)
+{
+  freewalk4proc_kpagetable(kpagetable, 0, p);
+}
+
+static void
+freewalk4proc_kpagetable(pagetable_t kpagetable, int level, struct proc *p)
+{
+  if (level > 2) return;
+  for (int i = 0; i < 512; i++) {
+    pte_t pte = kpagetable[i];
+    kpagetable[i] = 0;
+    if (pte & PTE_V) {
+      uint64 child = PTE2PA(pte);
+      // if (child == p->kstack_addr) 
+      //   printf("freeing kpagetable: %p, pte = %p, pgt_addr = %p\n", p->kstack_addr, pte, kpagetable + i);
+      freewalk4proc_kpagetable((pagetable_t) child, level + 1, p);
+    }
+  }
+  kfree((void*)kpagetable);
 }
 
 // Create a user page table for a given process,
@@ -481,7 +526,11 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        // kvmchangehart4proc(p->kpagetable);
+        w_satp(MAKE_SATP(p->kpagetable));
+        sfence_vma();
         swtch(&c->context, &p->context);
+        kvminithart();
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
