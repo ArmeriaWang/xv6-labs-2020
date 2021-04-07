@@ -389,6 +389,58 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
+#define USE_MINE
+
+void
+uvmmap2kvm(pagetable_t kpagetable, pagetable_t upagetable, uint64 oldsz, uint64 newsz) {
+
+#ifdef USE_MINE
+  if (newsz < oldsz) {
+    return;
+  }
+  if (newsz >= PLIC) {
+    panic("uvmmap2kvm :: new sz is too large");
+  }
+  oldsz = PGROUNDUP(oldsz);
+  for (uint64 i = oldsz; i < newsz && i < PLIC; i += PGSIZE) {
+    pte_t *upte = walk(upagetable, i, 0);
+    if (upte == 0) {
+      panic("uvmmap2kvm :: upte not exist");
+    }
+    if (((*upte) & PTE_V) == 0) {
+      printf("pa = %p\n", PTE2PA(*upte));
+      panic("uvmmap2kvm :: PTE_V of upte is unexpected not set");
+    }
+    pte_t *kpte = walk(kpagetable, i, 1);
+    if (kpte == 0) {
+      panic("uvmmap2kvm :: kpte not exist");
+    }
+    uint uflags = PTE_FLAGS(*upte);
+    *kpte = PA2PTE(PTE2PA(*upte)) | (uflags & (~PTE_U));
+  }
+#else
+  pte_t *pte_from, *pte_to;
+  uint64 a, pa;
+  uint flags;
+
+  if (newsz < oldsz)
+    return;
+  
+  oldsz = PGROUNDUP(oldsz);
+  for (a = oldsz; a < newsz; a += PGSIZE)
+  {
+    if ((pte_from = walk(upagetable, a, 0)) == 0)
+      panic("u2kvmcopy: pte should exist");
+    if ((pte_to = walk(kpagetable, a, 1)) == 0)
+      panic("u2kvmcopy: walk fails");
+    pa = PTE2PA(*pte_from);
+    // 清除PTE_U的标记位
+    flags = (PTE_FLAGS(*pte_from) & (~PTE_U));
+    *pte_to = PA2PTE(pa) | flags;
+  }
+#endif
+}
+
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
@@ -420,6 +472,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
+#if 0
   uint64 n, va0, pa0;
 
   while(len > 0){
@@ -437,6 +490,8 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
     srcva = va0 + PGSIZE;
   }
   return 0;
+#endif
+  return copyin_new(pagetable, dst, srcva, len);
 }
 
 // Copy a null-terminated string from user to kernel.
@@ -446,6 +501,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
+#if 0
   uint64 n, va0, pa0;
   int got_null = 0;
 
@@ -480,6 +536,8 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+#endif
+  return copyinstr_new(pagetable, dst, srcva, max);
 }
 
 void

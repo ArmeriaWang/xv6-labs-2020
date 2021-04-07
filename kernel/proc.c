@@ -278,6 +278,7 @@ userinit(void)
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
 
+  uvmmap2kvm(p->kpagetable, p->pagetable, 0, p->sz);
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
@@ -299,6 +300,7 @@ growproc(int n)
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    uvmmap2kvm(p->kpagetable, p->pagetable, sz - n, sz);
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
@@ -342,6 +344,8 @@ fork(void)
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
 
+  uvmmap2kvm(np->kpagetable, np->pagetable, 0, np->sz);
+  // printf("forking..., name = %s\n", p->name);
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;

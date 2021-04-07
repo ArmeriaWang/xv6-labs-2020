@@ -184,6 +184,13 @@ pagetable_t     make_kpagetable4proc();
 void            kvmmap4proc(pagetable_t kernel_pagetable, uint64 va, uint64 pa, uint64 sz, int perm);
 void            kvmchangehart4proc(pagetable_t kernel_pagetable);
 pte_t*          walk(pagetable_t pagetable, uint64 va, int alloc);
+void            uvmmap2kvm(pagetable_t kpagetable, pagetable_t upagetable, uint64 oldsz, uint64 newsz);
+
+
+// vmcopyin.c
+int             copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len);
+int             copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max);
+
 // plic.c
 void            plicinit(void);
 void            plicinithart(void);
