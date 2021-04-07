@@ -393,8 +393,6 @@ uvmclear(pagetable_t pagetable, uint64 va)
 
 void
 uvmmap2kvm(pagetable_t kpagetable, pagetable_t upagetable, uint64 oldsz, uint64 newsz) {
-
-#ifdef USE_MINE
   if (newsz < oldsz) {
     return;
   }
@@ -418,27 +416,6 @@ uvmmap2kvm(pagetable_t kpagetable, pagetable_t upagetable, uint64 oldsz, uint64 
     uint uflags = PTE_FLAGS(*upte);
     *kpte = PA2PTE(PTE2PA(*upte)) | (uflags & (~PTE_U));
   }
-#else
-  pte_t *pte_from, *pte_to;
-  uint64 a, pa;
-  uint flags;
-
-  if (newsz < oldsz)
-    return;
-  
-  oldsz = PGROUNDUP(oldsz);
-  for (a = oldsz; a < newsz; a += PGSIZE)
-  {
-    if ((pte_from = walk(upagetable, a, 0)) == 0)
-      panic("u2kvmcopy: pte should exist");
-    if ((pte_to = walk(kpagetable, a, 1)) == 0)
-      panic("u2kvmcopy: walk fails");
-    pa = PTE2PA(*pte_from);
-    // 清除PTE_U的标记位
-    flags = (PTE_FLAGS(*pte_from) & (~PTE_U));
-    *pte_to = PA2PTE(pa) | flags;
-  }
-#endif
 }
 
 // Copy from kernel to user.
