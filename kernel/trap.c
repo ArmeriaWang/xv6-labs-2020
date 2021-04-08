@@ -76,6 +76,21 @@ usertrap(void)
   if(p->killed)
     exit(-1);
 
+  if(which_dev == 2 && !(p->ticks == 0 && p->handler == 0)) {
+    // printf("USERTRAP!\n");
+    if (p->tick_cnt >= 0) {
+      p->tick_cnt++;
+      // printf("%d\n", p->tick_cnt);
+      if(p->tick_cnt == p->ticks){
+        backup_trapframe(p);
+        p->trapframe->epc = (uint64) p->handler;
+        p->tick_cnt = -1;
+        usertrapret();
+        // p->handler();
+      }
+    }
+  }
+
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();

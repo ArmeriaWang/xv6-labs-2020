@@ -10,6 +10,8 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+struct trapframe backup_tf[NPROC];
+
 struct proc *initproc;
 
 int nextpid = 1;
@@ -20,6 +22,18 @@ static void wakeup1(struct proc *chan);
 static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
+
+void
+backup_trapframe(struct proc *p)
+{
+  memmove(&backup_tf[p->pid], p->trapframe, sizeof(struct trapframe));
+}
+
+void
+resume_trapframe(struct proc *p)
+{
+  memmove(p->trapframe, &backup_tf[p->pid], sizeof(struct trapframe));
+}
 
 // initialize the proc table at boot time.
 void
@@ -126,6 +140,9 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  p->tick_cnt = 0;
+  p->ticks = 0;
+  p->handler = 0;
 
   return p;
 }
