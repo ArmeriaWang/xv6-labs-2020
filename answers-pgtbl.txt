@@ -1,1 +1,9 @@
-something something something something something something something something something something something something something something something something something something something something something something something something.
+The third statement is to prevent overflow.
+
+For example, srcva = 1, len = 18446744073709551615 (2^64-1), p->sz = 5,
+these values will case:
+    srcva < p->sz, 1st statement NOT satisfied;
+    srcva+len = 0 < p->sz, 2st statement NOT satisfied;
+    srcva+len = 0 < srcva, 3st statement satisfied,
+the third statement leads to the function returning -1.
+
