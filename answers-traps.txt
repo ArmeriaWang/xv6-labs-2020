@@ -1,0 +1,14 @@
+(1) Registers for function arguments: a0, a1, ..., a7.
+    Register a2 stores 13 for printf.
+
+(2) Function main inlines function f (instructions 0x1c ~ 0x22), and similarly f inlines g (simply copys g, 0xe ~ 0x1a).
+
+(3) Function printf locates at 0x630
+
+(4) Register ra holds 0x38 (the address of next instruction) after jalr.
+
+(5) Output: He110 World
+    If RISC-V is big-endian, variable i should be set to 0x726c6400, and the value 57616 should holds.
+
+(6) The value in register a2 (an unexpected value, maybe the third argument of the caller of printf) will be outputed.
+    That's because function printf tries to read the third argument which should be stored in a2 (but the caller doesn't provide it).
