@@ -12,3 +12,4 @@
 
 (6) The value in register a2 (an unexpected value, maybe the third argument of the caller of printf) will be outputed.
     That's because function printf tries to read the third argument which should be stored in a2 (but the caller doesn't provide it).
+ 
