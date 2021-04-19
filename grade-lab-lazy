@@ -9,7 +9,7 @@ r = Runner(save("xv6.out"))
 def test_lazytests():
     r.run_qemu(shell_script([
         'lazytests'
-    ]))
+    ]), timeout=100)
 
 @test(20, "lazy: map", parent=test_lazytests)
 def test_filetest():
@@ -23,7 +23,7 @@ def test_memtest():
 def test_usertests():
     r.run_qemu(shell_script([
         'usertests'
-    ]), timeout=300)
+    ]), timeout=1000)
 
 def usertest_check(testcase, nextcase, output):
     if not re.search(r'\ntest {}: [\s\S]*OK\ntest {}'.format(testcase, nextcase), output):

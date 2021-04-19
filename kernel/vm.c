@@ -102,26 +102,21 @@ walkaddr(pagetable_t pagetable, uint64 va)
   if(va >= MAXVA)
     return 0;
   
+  // Here must be modified because of system calls,
+  // In usertrap(), we only deal with page faults comes from user space,
+  // however in system calls (such as exec, write, etc), it also comes
+  // some situations that some va is applied but not mapped yet.
+  // In order to solve this problem, we must modify walkaddr()
   pte = walk(pagetable, va, 0);
-  #if 1
-  if(pte == 0)
-    return 0;
-  if((*pte & PTE_V) == 0)
-    return 0;
-  if((*pte & PTE_U) == 0)
-    return 0;
-  pa = PTE2PA(*pte);
-  return pa;
-  #else
   struct proc *p = myproc();
   if(pte == 0 || (*pte & PTE_V) == 0) {
-    printf("walkaddr():  va = %p  sz = %p\n", va, myproc()->sz);
-    if (va >= p->sz || va < PGROUNDUP(p->trapframe->sp))
+    if (va >= p->sz || va < p->trapframe->sp)
       return 0;
     uint64 ka = (uint64)kalloc();
     if (ka == 0) {
       return 0;
     }
+    memset((void*)ka, 0, PGSIZE);
     va = PGROUNDDOWN(va);
     if (mappages(p->pagetable, va, PGSIZE, ka, PTE_W | PTE_X | PTE_R | PTE_U) != 0) {
       kfree((void*)ka);
@@ -133,7 +128,6 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
   pa = PTE2PA(*pte);
   return pa;
-  #endif
 }
 
 // add a mapping to the kernel page table.

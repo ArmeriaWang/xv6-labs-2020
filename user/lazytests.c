@@ -83,7 +83,6 @@ oom(char *s)
     m1 = 0;
     while((m2 = malloc(4096*4096)) != 0){
       *(char**)m2 = m1;
-      printf("%p %p\n", m1, m2);
       m1 = m2;
     }
     exit(0);
