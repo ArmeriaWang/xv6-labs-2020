@@ -55,6 +55,9 @@ sys_sbrk(void)
     p->sz = addr = uvmdealloc(p->pagetable, addr, addr + n);
   }
   else {
+    // if (addr + n < addr || addr + n > MAXVA) {
+    //   return -1;
+    // }
     p->sz = addr + n;
   }
   // if(growproc(n) < 0)
