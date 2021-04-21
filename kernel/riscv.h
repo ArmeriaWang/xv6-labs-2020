@@ -331,6 +331,10 @@ sfence_vma()
 #define PTE_W (1L << 2)
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // 1 -> user can access
+#define PTE_COW (1L << 8)
+// #define PTE_RSW ((1L << 8) | (1L << 9))
+// #define CONSTR_PTE_RSW(low, high) ((low ? (1L << 8) : 0 ) | (high ? (1L << 9) : 0))
+// #define SET_PTE_RSW(pte, low, high) (((pte >> 10) << 10) | CONSTR_PTE_RSW(low, high) | (pte & 0xff))
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)

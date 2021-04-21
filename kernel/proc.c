@@ -296,6 +296,7 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&np->lock);
+  // printf("DEBUG :: fork(): finished\n");
 
   return pid;
 }
@@ -387,6 +388,7 @@ exit(int status)
 
   release(&original_parent->lock);
 
+  // printf("DEBUG :: exit(): going to scheduler\n");
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
@@ -508,6 +510,15 @@ sched(void)
     panic("sched p->lock");
   if(mycpu()->noff != 1)
     panic("sched locks");
+  if (p->state == ZOMBIE) {
+    // printf("DEBUG :: sched() : A, pid=%d, state=%s\n", p->pid, "ZOMBIE");
+  }
+  else if (p->state == SLEEPING) {
+    // printf("DEBUG :: sched() : A, pid=%d, state=%s\n", p->pid, "SLEEPING");
+  }
+  else if (p->state == RUNNABLE) {
+    // printf("DEBUG :: sched() : A, pid=%d, state=%s\n", p->pid, "RUNNABLE");
+  }
   if(p->state == RUNNING)
     panic("sched running");
   if(intr_get())
@@ -515,6 +526,7 @@ sched(void)
 
   intena = mycpu()->intena;
   swtch(&p->context, &mycpu()->context);
+  // printf("DEBUG :: sched() : C, pid=%d\n", p->pid);
   mycpu()->intena = intena;
 }
 

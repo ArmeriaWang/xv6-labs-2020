@@ -22,21 +22,29 @@ simpletest()
     printf("sbrk(%d) failed\n", sz);
     exit(-1);
   }
-
+  // printf("DEBUG :: cowtest: sbrk passed\n");
   for(char *q = p; q < p + sz; q += 4096){
     *(int*)q = getpid();
   }
-
+  // int fatherpid = getpid();
+  
   int pid = fork();
+  // printf("DEBUG :: cowtest: fork finsished\n");
+  
   if(pid < 0){
     printf("fork() failed\n");
     exit(-1);
   }
-
-  if(pid == 0)
+  if (pid > 0) {
+    // printf("DEBUG :: cowtest: I'm father process! pid=%d\n", getpid());
+  }
+  if(pid == 0) {
+    // printf("DEBUG :: cowtest: I'm child process! pid=%d ready to exit, father pid=%d\n", getpid(), fatherpid);
     exit(0);
-
+  }
+  // printf("DEBUG :: father process pid=%d  waiting...\n", pid);
   wait(0);
+  // printf("DEBUG :: fork passed\n");
 
   if(sbrk(-sz) == (char*)0xffffffffffffffffL){
     printf("sbrk(-%d) failed\n", sz);
