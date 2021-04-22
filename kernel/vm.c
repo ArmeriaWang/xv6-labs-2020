@@ -366,12 +366,19 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pte_t *pte = walk(pagetable, va0, 0); 
-    if (*pte & PTE_COW) {
+    // pte_t *pte = walk(pagetable, va0, 0);
+    // if (pte == 0) {
+      // printf("copyout(): ERROR! pte=0\n");
+      // return -1;
+    // }
+    // if ((*pte) & PTE_COW) {
       if (cow_alloc(pagetable, va0) != 0) {
+        // pte_t *pte_0 = walk(pagetable, va0, 0);
+        // if (*pte_0 != *pte) printf("ERROR :: before=%p, after=%p\n", pte, pte_0);
+        // printf("copyout(): ERROR! cow_alloc=0\n");
         return -1;
       }
-    }
+    // }
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0) {
       return -1;
@@ -458,37 +465,43 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 
 
 int
-cow_alloc(pagetable_t pagetable, uint64 va) {
+cow_alloc(pagetable_t pagetable, uint64 va)
+{
+  uint64 pa;
+  pte_t *pte;
+  uint flags;
+
+  if (va >= MAXVA) {
+    // printf("cow_alloc(): ERROR va>=MAXVA\n");
+    return -1;
+  }
   va = PGROUNDDOWN(va);
-  pte_t* pte = walk(pagetable, va, 0);
-  // printf("cow_alloc() = %p\n", *pte);
+  pte = walk(pagetable, va, 0);
   if (pte == 0) {
+    // printf("cow_alloc(): ERROR A!\n");
     return -1;
   }
-  uint64 old_pa = PTE2PA(*pte);
-  if (old_pa == 0) {
+  pa = PTE2PA(*pte);
+  if (pa == 0) {
+    // printf("cow_alloc(): ERROR B!\n");
     return -1;
   }
-  if (*pte & PTE_COW) {
-    uint64 new_pa = (uint64)kalloc();
-    if (new_pa == 0) {
-      return -1;
-    }
-    memmove((void*)new_pa, (void*)old_pa, PGSIZE);
-    kfree((void*)old_pa);
-    uint flags = (PTE_FLAGS(*pte) & (~PTE_COW)) | PTE_W;
-    *pte = PA2PTE(new_pa) | flags;
+
+  flags = PTE_FLAGS(*pte);
+
+  if (flags & PTE_COW)
+  {
+    char *ka = kalloc();
+    if (ka == 0) return -1;
+    memmove(ka, (char*)pa, PGSIZE);
+    kfree((void*)pa);
+    flags = (flags & ~PTE_COW) | PTE_W;
+    *pte = PA2PTE((uint64)ka) | flags;
+  }
+  // else {
+    // printf("cow_alloc(): ERROR C!\n");
+    // return -1;
+  // }
   
-    // uvmunmap(pagetable, va, 1, 0);
-    // if (mappages(pagetable, va, PGSIZE, new_pa, PTE_FLAGS(*pte)) != 0) {
-    //   kfree((void*)new_pa);
-    //   return -1;
-    // }
-    // pte_ref_cnt[(uint64)old_pa / PGSIZE]--;
-  }
-  else {
-    return -1;
-  }
-  // printf("cow_alloc(): cow finished\n");
   return 0;
 }
