@@ -1,0 +1,12 @@
+Thread 1:
+put(1, 1);
+put(2, 2);
+
+Thread 2:
+put(3, 3);
+
+Thread 1 first inserted (1, 1) to the map, and then inserts (2, 2).
+Simultaneously, thread 2 inserts (3, 3). If thread 1 executes line 36
+<code> *p = e </code> earlier than thread 2, pair (2, 2) will be override
+and lost. When someone wants to get the value of key 2, the map will
+return 0.
