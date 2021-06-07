@@ -5,6 +5,8 @@ struct buf {
   uint blockno;
   struct sleeplock lock;
   uint refcnt;
+  uint tstamp;
+  uint bktord;
   struct buf *prev; // LRU cache list
   struct buf *next;
   uchar data[BSIZE];

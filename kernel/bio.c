@@ -23,15 +23,31 @@
 #include "fs.h"
 #include "buf.h"
 
+
+struct bbucket {
+  struct spinlock lock;
+  struct buf *bentry[NBUF];
+  uint entry_num;
+};
+
 struct {
   struct spinlock lock;
   struct buf buf[NBUF];
-
+  struct bbucket hashbkt[NBUCKET];
+  uint glob_tstamp;
+  
   // Linked list of all buffers, through prev/next.
   // Sorted by how recently the buffer was used.
   // head.next is most recent, head.prev is least.
-  struct buf head;
+  // struct buf head;
 } bcache;
+
+struct spinlock dbglk;
+
+struct bbucket*
+bhash(uint blockno) {
+  return &bcache.hashbkt[blockno % NBUCKET];
+}
 
 void
 binit(void)
@@ -39,16 +55,30 @@ binit(void)
   struct buf *b;
 
   initlock(&bcache.lock, "bcache");
+  initlock(&dbglk, "debug");
 
+  struct bbucket *bkt;
+  for(bkt = bcache.hashbkt; bkt < bcache.hashbkt+NBUCKET; bkt++) {
+    initlock(&bkt->lock, "bbucket");
+    bkt->entry_num = 0;
+  }
+  
   // Create linked list of buffers
-  bcache.head.prev = &bcache.head;
-  bcache.head.next = &bcache.head;
-  for(b = bcache.buf; b < bcache.buf+NBUF; b++){
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
+  bcache.glob_tstamp = 0;
+  for (int i = 0; i < NBUF; i++) {
+    b = &bcache.buf[i];
     initsleeplock(&b->lock, "buffer");
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
+    b->blockno = i;
+    b->refcnt = 0;
+    b->tstamp = 0;
+    b->valid = 0;
+    bkt = bhash(b->blockno);
+    b->bktord = bkt->entry_num;
+    bkt->bentry[bkt->entry_num++] = b;
+  }
+  printf("binit ok\n");
+  for (int i = 0; i < NBUCKET; i++) {
+    printf("bucket %d.entry_num = %d\n", i, bcache.hashbkt[i].entry_num);
   }
 }
 
@@ -58,15 +88,18 @@ binit(void)
 static struct buf*
 bget(uint dev, uint blockno)
 {
-  struct buf *b;
+  // printf("\nbget:: dev = %d  blockno = %d\n", dev, blockno);
 
-  acquire(&bcache.lock);
-
+  // acquire(&dbglk);
   // Is the block already cached?
-  for(b = bcache.head.next; b != &bcache.head; b = b->next){
+  struct bbucket *bkt = bhash(blockno);
+  acquire(&bkt->lock);
+  for(int i = 0; i < bkt->entry_num; i++){
+    struct buf *b = bkt->bentry[i];
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
-      release(&bcache.lock);
+      release(&bkt->lock);
+      // release(&dbglk);
       acquiresleep(&b->lock);
       return b;
     }
@@ -74,18 +107,75 @@ bget(uint dev, uint blockno)
 
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
-  for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
-    if(b->refcnt == 0) {
-      b->dev = dev;
-      b->blockno = blockno;
-      b->valid = 0;
-      b->refcnt = 1;
+  // Release bkt->lock at first, preventing dead locks
+  release(&bkt->lock);
+  acquire(&bcache.lock);
+  acquire(&bkt->lock);
+
+  // Recheck for existance of the block
+  for(int i = 0; i < bkt->entry_num; i++){
+    struct buf *b = bkt->bentry[i];
+    if(b->dev == dev && b->blockno == blockno){
+      b->refcnt++;
       release(&bcache.lock);
+      release(&bkt->lock);
+      // release(&dbglk);
       acquiresleep(&b->lock);
       return b;
     }
   }
-  panic("bget: no buffers");
+  
+  // Loop for the eviction
+  while (1) {
+    struct buf *evict_buf = 0;
+    uint min_tstamp = 0xffffffff;
+    for (struct buf *b = bcache.buf; b < bcache.buf+NBUF; b++){
+      if(b->refcnt == 0 && b->tstamp < min_tstamp) {
+        min_tstamp = b->tstamp;
+        evict_buf = b;
+      }
+    }
+    if (!evict_buf) {
+      panic("bget: no buffers");
+    }
+    struct bbucket *evict_bkt = bhash(evict_buf->blockno);
+    // printf("bget:: evict_bkt = %d  entry_num = %d\n", evict_buf->blockno%NBUCKET, evict_bkt->entry_num);
+    // printf("bget:: evict_buf.blkno %d  bktord = %d\n", evict_buf->blockno, evict_buf->bktord);
+    if (evict_bkt != bkt) {
+      acquire(&evict_bkt->lock);
+    }
+    // Recheck refcnt after obtaining the lock
+    if (evict_buf->refcnt != 0) {
+      if (evict_bkt != bkt) {
+        release(&evict_bkt->lock);
+      }
+      // refcnt is not 0, reseek for an available buffer block
+      continue;
+    }
+    // This block can be evicted
+    uint num = evict_bkt->entry_num;
+    if (evict_buf->bktord < num - 1) {
+      evict_bkt->bentry[evict_buf->bktord] = evict_bkt->bentry[num - 1];
+      evict_bkt->bentry[evict_buf->bktord]->bktord = evict_buf->bktord;
+    }
+    evict_bkt->entry_num--;
+    if (evict_bkt != bkt) {
+      release(&evict_bkt->lock);
+    }
+
+    evict_buf->bktord = bkt->entry_num;
+    bkt->bentry[bkt->entry_num++] = evict_buf;
+    evict_buf->dev = dev;
+    evict_buf->blockno = blockno;
+    evict_buf->valid = 0;
+    evict_buf->refcnt = 1;
+    acquiresleep(&evict_buf->lock);
+    release(&bcache.lock);
+    release(&bkt->lock);
+    // release(&dbglk);
+    return evict_buf;
+  }
+
 }
 
 // Return a locked buf with the contents of the indicated block.
@@ -95,6 +185,7 @@ bread(uint dev, uint blockno)
   struct buf *b;
 
   b = bget(dev, blockno);
+  b->tstamp = ++bcache.glob_tstamp;
   if(!b->valid) {
     virtio_disk_rw(b, 0);
     b->valid = 1;
@@ -108,6 +199,7 @@ bwrite(struct buf *b)
 {
   if(!holdingsleep(&b->lock))
     panic("bwrite");
+  b->tstamp = ++bcache.glob_tstamp;
   virtio_disk_rw(b, 1);
 }
 
@@ -116,38 +208,36 @@ bwrite(struct buf *b)
 void
 brelse(struct buf *b)
 {
+  // printf("\nbrelse:: blkno = %d  bkt = %d  ord = %d\n", b->blockno, b->blockno%NBUCKET, b->bktord);
   if(!holdingsleep(&b->lock))
     panic("brelse");
 
+  struct bbucket *bkt = bhash(b->blockno);
   releasesleep(&b->lock);
 
-  acquire(&bcache.lock);
+  acquire(&bkt->lock);
   b->refcnt--;
   if (b->refcnt == 0) {
     // no one is waiting for it.
-    b->next->prev = b->prev;
-    b->prev->next = b->next;
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
+    b->tstamp = 0;
   }
   
-  release(&bcache.lock);
+  release(&bkt->lock);
 }
 
 void
 bpin(struct buf *b) {
-  acquire(&bcache.lock);
+  struct bbucket *bkt = bhash(b->blockno);
+  acquire(&bkt->lock);
   b->refcnt++;
-  release(&bcache.lock);
+  b->tstamp = ++bcache.glob_tstamp;
+  release(&bkt->lock);
 }
 
 void
 bunpin(struct buf *b) {
-  acquire(&bcache.lock);
+  struct bbucket *bkt = bhash(b->blockno);
+  acquire(&bkt->lock);
   b->refcnt--;
-  release(&bcache.lock);
+  release(&bkt->lock);
 }
-
-
