@@ -42,7 +42,7 @@ struct {
   // struct buf head;
 } bcache;
 
-struct spinlock dbglk;
+// struct spinlock dbglk;
 
 struct bbucket*
 bhash(uint blockno) {
@@ -55,7 +55,7 @@ binit(void)
   struct buf *b;
 
   initlock(&bcache.lock, "bcache");
-  initlock(&dbglk, "debug");
+  // initlock(&dbglk, "debug");
 
   struct bbucket *bkt;
   for(bkt = bcache.hashbkt; bkt < bcache.hashbkt+NBUCKET; bkt++) {
