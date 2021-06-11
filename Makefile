@@ -229,7 +229,10 @@ UPROGS += \
 	$U/_bigfile
 endif
 
-
+ifeq ($(LAB),fs)
+UPROGS += \
+	$U/_symlinktest
+endif
 
 ifeq ($(LAB),net)
 UPROGS += \
