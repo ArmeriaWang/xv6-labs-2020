@@ -28,6 +28,7 @@ main()
   }
 
   printf("\nwrote %d blocks\n", blocks);
+  // if(blocks != MAXFILE) {
   if(blocks != 65803) {
     printf("bigfile: file is too small\n");
     exit(-1);
@@ -39,12 +40,15 @@ main()
     printf("bigfile: cannot re-open big.file for reading\n");
     exit(-1);
   }
+  // printf("line 42\n");
   for(i = 0; i < blocks; i++){
+    // printf("line 44, i = %d\n", i);
     int cc = read(fd, buf, sizeof(buf));
     if(cc <= 0){
       printf("bigfile: read error at block %d\n", i);
       exit(-1);
     }
+    // printf("line 50, i = %d\n", i);
     if(*(int*)buf != i){
       printf("bigfile: read the wrong data (%d) for block %d\n",
              *(int*)buf, i);

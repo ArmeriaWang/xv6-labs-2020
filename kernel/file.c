@@ -119,8 +119,10 @@ fileread(struct file *f, uint64 addr, int n)
     r = devsw[f->major].read(1, addr, n);
   } else if(f->type == FD_INODE){
     ilock(f->ip);
+    // printf("fileread :: calling func readi...\n");
     if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
       f->off += r;
+    // printf("fileread :: readi finfished\n");
     iunlock(f->ip);
   } else {
     panic("fileread");
